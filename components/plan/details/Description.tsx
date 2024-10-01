@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils/cn'
 import { formatKoreanDate } from '@/lib/utils/dateUtils'
 import useModal from '@/lib/utils/hooks/useModal'
 import { toast } from '@/lib/utils/hooks/useToast'
+import { formatBudget, formatNumOfReview } from '@/lib/utils/stringUtils'
 
 interface DescriptionProps {
   plan: Plan
@@ -71,53 +72,67 @@ const Description = ({ plan, planUser, user, className }: DescriptionProps): Rea
   }
 
   // #1. Plan Likes Mutation
-  const { mutate: likesMutate } = useMutation({
+  const { mutate: likesMutate, isPending: isLikesPending } = useMutation({
     mutationKey: ['plan', { planId: id }],
     mutationFn: !tmpLikeData.isLiked ? planAddLikes : planDeleteLikes,
-    onSuccess: () => {
+    onError: error => {
       setTmpLikeData(prev => ({
         likeCnt: !tmpLikeData.isLiked ? (prev.likeCnt += 1) : (prev.likeCnt -= 1),
         isLiked: !prev.isLiked,
       }))
+      toast({ title: '서버 오류 다시 시도해주세요' })
     },
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['plan', { planId: id }] })
-      queryClient.invalidateQueries({ queryKey: ['plans', user?.userId, 'user'] })
+      queryClient.invalidateQueries({ queryKey: ['plans'] })
     },
   })
 
   const likeHandler = () => {
+    if (isLikesPending) {
+      toast({ title: '다른 작업 수행중입니다.' })
+    }
     // #1. 로그인X 상태 (좋아요 누르기, 스크랩 누르기)
     if (!user) {
       handleModalStates(ClientModalData.loginRequiredError, 'open')
     }
     // #2. 로그인 상태
+    setTmpLikeData(prev => ({
+      likeCnt: !tmpLikeData.isLiked ? (prev.likeCnt += 1) : (prev.likeCnt -= 1),
+      isLiked: !prev.isLiked,
+    }))
     likesMutate({ planId: id, accessToken: user.accessToken })
   }
 
   // #1. Plan Scrap Mutations
-  const { mutate: scrapMutate } = useMutation({
+  const { mutate: scrapMutate, isPending: isScrapPending } = useMutation({
     mutationKey: ['plan', { planId: id }],
     mutationFn: !tmpScrapData.isScraped ? planAddScrap : planDeleteScrap,
-    onSuccess: () => {
+    onError: () => {
       setTmpScrapData(prev => ({
         scrapCnt: !tmpScrapData.isScraped ? (prev.scrapCnt += 1) : (prev.scrapCnt -= 1),
         isScraped: !prev.isScraped,
       }))
     },
-
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['plan', { planId: id }] })
-      queryClient.invalidateQueries({ queryKey: ['plans', user?.userId, 'user'] })
+      queryClient.invalidateQueries({ queryKey: ['plans'] })
     },
   })
   const scrapHandler = () => {
+    if (isScrapPending) {
+      toast({ title: '다른 작업 수행중입니다.' })
+    }
     // #1. 로그인X 상태 (좋아요 누르기, 스크랩 누르기)
     if (!user) {
       handleModalStates(ClientModalData.loginRequiredError, 'open')
     }
     // #2. 로그인 상태
+    setTmpScrapData(prev => ({
+      scrapCnt: !tmpScrapData.isScraped ? (prev.scrapCnt += 1) : (prev.scrapCnt -= 1),
+      isScraped: !prev.isScraped,
+    }))
     scrapMutate({ planId: id, accessToken: user.accessToken })
   }
 
@@ -134,7 +149,7 @@ const Description = ({ plan, planUser, user, className }: DescriptionProps): Rea
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['plan', { planId: id }] })
-      queryClient.invalidateQueries({ queryKey: ['plans', user?.userId, 'user'] })
+      queryClient.invalidateQueries({ queryKey: ['plans'] })
     },
   })
   const planDeleteHandler = () => {
@@ -188,33 +203,31 @@ const Description = ({ plan, planUser, user, className }: DescriptionProps): Rea
 
         <div className='flex w-full items-center justify-start gap-3 text-base font-medium'>
           <span>{memberCnt}명</span>
-          <span>{budget}원</span>
+          <span>{budget ? formatBudget(budget) : 0}원</span>
         </div>
         <div className='flex items-center justify-start gap-3'>
-          <div className='flex w-fit cursor-pointer items-center justify-start gap-1 text-base'>
+          <div onClick={likeHandler} className='flex w-fit cursor-pointer items-center justify-start gap-1 text-base'>
             <LucideIcon
-              onClick={likeHandler}
               name='Heart'
               fill={tmpLikeData.isLiked ? 'tbRed' : undefined}
               // strokeWidth={tmpLikeData ? 0 : 2}
               size={20}
               // className={cn(tmpScrapData ? 'hover:fill-none' : 'hover:fill-tbRed')}
             />
-            <span>{tmpLikeData.likeCnt}</span>
+            <span>{formatNumOfReview(tmpLikeData.likeCnt)}</span>
           </div>
           <div className='flex w-fit cursor-pointer items-center justify-start gap-1 text-base'>
+            <LucideIcon name='MessageCircle' size={20} />
+            <span>{comments ? formatNumOfReview(comments?.length) : 0}</span>
+          </div>
+          <div onClick={scrapHandler} className='flex w-fit cursor-pointer items-center justify-start gap-1 text-base'>
             <LucideIcon
-              onClick={scrapHandler}
               name='Bookmark'
               // className={cn(tmpScrapData ? 'hover:fill-none' : 'hover:fill-tbPrimaryHover')}
               fill={tmpScrapData.isScraped ? 'tbPrimaryHover' : undefined}
               size={20}
             />
-            <span>{tmpScrapData.scrapCnt}</span>
-          </div>
-          <div className='flex w-fit cursor-pointer items-center justify-start gap-1 text-base'>
-            <LucideIcon name='MessageCircle' size={20} />
-            <span>{comments?.length}</span>
+            <span>{formatNumOfReview(tmpScrapData.scrapCnt)}</span>
           </div>
         </div>
       </div>
